@@ -92,15 +92,19 @@ section h2 span { font-family: var(--mono); font-size: 12px; color: var(--muted)
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
   display: grid; gap: 8px; align-content: start; min-width: 0;
 }
-.card.fav { border-color: var(--carmine); }
 .top { display: flex; gap: 8px; align-items: start; justify-content: space-between; }
 .card h3 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; }
-.star { flex: none; border: 0; background: none; cursor: pointer; font-size: 20px; line-height: 1; color: var(--line); padding: 2px; }
-.star[aria-pressed="true"] { color: var(--carmine); }
-.marks { display: flex; gap: 2px; flex: none; }
-.tick { flex: none; border: 1px solid var(--line); background: none; cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1; color: var(--line); width: 26px; height: 26px; border-radius: 6px; padding: 0; }
-.tick[aria-pressed="true"] { background: var(--good-soft); border-color: var(--good); color: var(--good); }
-.card.done { opacity: .72; }
+.marks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mark {
+  font: inherit; font-size: 12px; font-weight: 600; padding: 7px 4px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted); white-space: nowrap;
+}
+.mark.yes[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: var(--surface); }
+.mark.no[aria-pressed="true"] { background: var(--low); border-color: var(--low); color: var(--surface); }
+.mark.been[aria-pressed="true"] { background: var(--cobalt); border-color: var(--cobalt); color: var(--surface); }
+.card.fav { border-color: var(--good); border-width: 2px; }
+.card.skip { opacity: .55; }
+.card.done { background: var(--cobalt-soft); }
 .what { margin: 0; font-size: 14px; }
 .meta { display: grid; gap: 4px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 .meta .price { color: var(--ink); }
@@ -149,19 +153,22 @@ footer p { margin: 0; }
 <div class="wrap">
   <header>
     <div class="plaque"><small>Madrid · abril 2027</small><h1>Dónde comer</h1></div>
-    <p class="lede">Every place to eat from the reels you and Luisana sent each other on Instagram, <strong>January–October 2026</strong> (last checked 30 Oct), plus a few Andrés added directly. <span id="total"></span> Each place shows its online ratings and a price level, checked in late October 2026. Tap ☆ for places you want to go and ✓ once you've been; the marks stay on this phone.</p>
+    <p class="lede">Every place to eat from the reels you and Luisana sent each other on Instagram, <strong>January–October 2026</strong> (last checked 30 Oct), plus a few Andrés added directly. <span id="total"></span> Each place shows its online ratings and a price level, checked in late October 2026. Mark each place <b>Interested</b> or <b>Not interested</b>, and <b>Been there</b> once you've gone; your marks stay on this phone.</p>
   </header>
 
   <div class="controls">
     <div class="row">
       <input type="search" id="q" placeholder="Search a name, dish or street" aria-label="Search places">
+    </div>
+    <div class="row">
       <select id="sort" aria-label="Sort places">
         <option value="guide">Guide order</option>
         <option value="score">Highest rated</option>
         <option value="price">Cheapest first</option>
       </select>
-      <button class="chip" id="favOnly" aria-pressed="false">☆ Want to go</button>
-      <button class="chip" id="hideVisited" aria-pressed="false">Hide ✓ visited</button>
+      <button class="chip" id="favOnly" aria-pressed="false">Interested only</button>
+      <button class="chip" id="hideSkip" aria-pressed="false">Hide not interested</button>
+      <button class="chip" id="hideVisited" aria-pressed="false">Hide been there</button>
     </div>
     <div class="row" id="cats" role="group" aria-label="Filter by type"></div>
     <div class="count" id="count"></div>
@@ -197,12 +204,12 @@ function scoreOf(p) {
 
 const CATS = [...new Set(PLACES.map(p => p.c))];
 const BY = {A: "Andrés sent", L: "Luisana sent", B: "Both sent", D: "Added by Andrés"};
-const state = { q: "", cat: "All", favOnly: false, hideVisited: false, sort: "guide", favs: new Set(), visited: new Set() };
-try { state.favs = new Set(JSON.parse(localStorage.getItem("mad27-favs") || "[]")); } catch (e) {}
-try { state.visited = new Set(JSON.parse(localStorage.getItem("mad27-visited") || "[]")); } catch (e) {}
+// Marks per place, saved on this phone: favs = interested, skips = not interested, visited = been there.
+const state = { q: "", cat: "All", favOnly: false, hideSkip: false, hideVisited: false, sort: "guide", favs: new Set(), skips: new Set(), visited: new Set() };
+const MARKS = { favs: "mad27-favs", skips: "mad27-skips", visited: "mad27-visited" };
+for (const [k, key] of Object.entries(MARKS)) { try { state[k] = new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch (e) {} }
 const saveMarks = () => { try {
-  localStorage.setItem("mad27-favs", JSON.stringify([...state.favs]));
-  localStorage.setItem("mad27-visited", JSON.stringify([...state.visited]));
+  for (const [k, key] of Object.entries(MARKS)) localStorage.setItem(key, JSON.stringify([...state[k]]));
 } catch (e) {} };
 
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -225,6 +232,7 @@ document.getElementById("q").addEventListener("input", e => { state.q = e.target
 document.getElementById("sort").addEventListener("change", e => { state.sort = e.target.value; render(); });
 document.getElementById("favOnly").addEventListener("click", () => { state.favOnly = !state.favOnly; render(); });
 document.getElementById("hideVisited").addEventListener("click", () => { state.hideVisited = !state.hideVisited; render(); });
+document.getElementById("hideSkip").addEventListener("click", () => { state.hideSkip = !state.hideSkip; render(); });
 
 function ratingBlock(p) {
   if (p.unrated) return "";
@@ -248,19 +256,20 @@ function ratingBlock(p) {
 }
 
 function card(p) {
-  const fav = state.favs.has(p.n), done = state.visited.has(p.n);
+  const fav = state.favs.has(p.n), skip = state.skips.has(p.n), done = state.visited.has(p.n);
   const a = addrOf(p);
   const r = RT[p.n] || {};
   const reels = [[p.r, p.s], [p.r2, p.s2]].filter(x => x[0])
     .map(([c, s]) => `<a href="${R(c)}" target="_blank" rel="noopener">Reel by @${esc(s)}</a>`).join("");
   const menu = r.menu ? `<a href="${esc(r.menu)}" target="_blank" rel="noopener">Menu</a>`
     : r.site ? `<a href="${esc(r.site)}" target="_blank" rel="noopener">${/instagram\.com/.test(r.site) ? "Instagram" : "Website"}</a>` : "";
-  return `<article class="card${fav ? " fav" : ""}${done ? " done" : ""}">
-    <div class="top"><h3>${esc(p.n)}</h3>
-      <div class="marks">
-        <button class="star" type="button" data-n="${esc(p.n)}" aria-pressed="${fav}" aria-label="Want to go to ${esc(p.n)}">${fav ? "★" : "☆"}</button>
-        <button class="tick" type="button" data-n="${esc(p.n)}" aria-pressed="${done}" aria-label="Visited ${esc(p.n)}">✓</button>
-      </div></div>
+  const mark = (set, cls, label, on) =>
+    `<button class="mark ${cls}" type="button" data-set="${set}" data-n="${esc(p.n)}" aria-pressed="${on}">${label}</button>`;
+  return `<article class="card${fav ? " fav" : ""}${skip ? " skip" : ""}${done ? " done" : ""}">
+    <div class="top"><h3>${esc(p.n)}</h3></div>
+    <div class="marks" role="group" aria-label="Your plans for ${esc(p.n)}">
+      ${mark("favs", "yes", "✓ Interested", fav)}${mark("skips", "no", "✕ Not interested", skip)}${mark("visited", "been", "Been there", done)}
+    </div>
     ${ratingBlock(p)}
     <p class="what">${esc(p.w)}</p>
     ${(a || p.p) ? `<div class="meta">${a ? `<span>${esc(a)}</span>` : ""}${p.p ? `<span class="price">From the reel: ${esc(p.p)}</span>` : ""}</div>` : ""}
@@ -280,9 +289,11 @@ function render() {
   document.querySelectorAll("#cats .chip").forEach(b => b.setAttribute("aria-pressed", String(b.textContent === state.cat)));
   document.getElementById("favOnly").setAttribute("aria-pressed", String(state.favOnly));
   document.getElementById("hideVisited").setAttribute("aria-pressed", String(state.hideVisited));
+  document.getElementById("hideSkip").setAttribute("aria-pressed", String(state.hideSkip));
   const hits = PLACES.filter(p =>
     (state.cat === "All" || p.c === state.cat) &&
     (!state.favOnly || state.favs.has(p.n)) &&
+    (!state.hideSkip || !state.skips.has(p.n)) &&
     (!state.hideVisited || !state.visited.has(p.n)) &&
     (!state.q || [p.n, p.w, addrOf(p), p.p, p.c, p.s, p.s2, p.note, (RT[p.n] || {}).x].join(" ").toLowerCase().includes(state.q)));
   document.getElementById("count").textContent = hits.length + (hits.length === 1 ? " place" : " places") + " shown";
@@ -296,9 +307,15 @@ function render() {
   }).join("");
 }
 document.getElementById("list").addEventListener("click", e => {
-  const b = e.target.closest(".star, .tick"); if (!b) return;
-  const set = b.classList.contains("star") ? state.favs : state.visited;
-  const n = b.dataset.n; set.has(n) ? set.delete(n) : set.add(n);
+  const b = e.target.closest(".mark"); if (!b) return;
+  const n = b.dataset.n, set = state[b.dataset.set];
+  if (set.has(n)) set.delete(n);
+  else {
+    set.add(n);
+    // Interested and Not interested exclude each other.
+    if (b.dataset.set === "favs") state.skips.delete(n);
+    if (b.dataset.set === "skips") state.favs.delete(n);
+  }
   saveMarks(); render();
 });
 render();
