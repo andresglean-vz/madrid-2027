@@ -81,6 +81,11 @@ button.chip {
 button.chip[aria-pressed="true"] { background: var(--cobalt); border-color: var(--cobalt); color: var(--surface); }
 button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--carmine); outline-offset: 2px; }
 .count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.review { display: grid; gap: 10px; max-width: 68ch; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 10px; background: var(--surface); }
+.review p { margin: 0; font-size: 13.5px; }
+.send { font: inherit; font-size: 13.5px; font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer; border: 0; background: var(--low); color: var(--surface); }
+.send:disabled { background: var(--line); color: var(--muted); cursor: default; }
+.review textarea { width: 100%; min-height: 110px; font: 12.5px var(--mono); padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 section { display: grid; gap: 14px; }
 section h2 {
   margin: 0; font-family: var(--display); font-weight: 400; font-size: 24px; color: var(--cobalt);
@@ -153,7 +158,13 @@ footer p { margin: 0; }
 <div class="wrap">
   <header>
     <div class="plaque"><small>Madrid · abril 2027</small><h1>Dónde comer</h1></div>
-    <p class="lede">Every place to eat from the reels you and Luisana sent each other on Instagram, <strong>January–October 2026</strong> (last checked 30 Oct), plus a few Andrés added directly. <span id="total"></span> Each place shows its online ratings and a price level, checked in late October 2026. Mark each place <b>Interested</b> or <b>Not interested</b>, and <b>Been there</b> once you've gone; your marks stay on this phone.</p>
+    <p class="lede">Every place to eat from the reels you and Luisana sent each other on Instagram, <strong>January 2026 to 8 November 2026</strong>, plus a few Andrés added directly. <span id="total"></span> Each place shows its online ratings and a price level. Mark each place <b>Interested</b> or <b>Not interested</b>, and <b>Been there</b> once you've gone; your marks stay on this phone.</p>
+    <div class="review" id="review">
+      <p><strong>Cleaning up the guide?</strong> Mark the places you don't want as <b>✕ Not interested</b>, then tap the button to send your list. They'll be taken out at the next update.</p>
+      <div class="row"><button class="send" id="sendList" type="button">Send my ✕ list</button><span class="count" id="markCount"></span></div>
+      <textarea id="listText" readonly hidden aria-label="Your list to copy"></textarea>
+      <p class="count" id="sendNote" hidden></p>
+    </div>
   </header>
 
   <div class="controls">
@@ -298,6 +309,9 @@ function render() {
     (!state.hideVisited || !state.visited.has(p.n)) &&
     (!state.q || [p.n, p.w, addrOf(p), p.p, p.c, p.s, p.s2, p.note, (RT[p.n] || {}).x].join(" ").toLowerCase().includes(state.q)));
   document.getElementById("count").textContent = hits.length + (hits.length === 1 ? " place" : " places") + " shown";
+  const nNo = state.skips.size;
+  document.getElementById("markCount").textContent = nNo ? `${nNo} marked ✕ Not interested` : "Nothing marked ✕ yet";
+  document.getElementById("sendList").disabled = !nNo;
   const list = document.getElementById("list");
   list.style.display = "grid"; list.style.gap = "32px";
   if (!hits.length) { list.innerHTML = `<p class="empty">No places match. Clear the search or pick another type.</p>`; return; }
@@ -318,6 +332,23 @@ document.getElementById("list").addEventListener("click", e => {
     if (b.dataset.set === "skips") state.favs.delete(n);
   }
   saveMarks(); render();
+});
+// The list goes out as plain text (WhatsApp, email…) so it can be pasted to Claude at the next update.
+function listText() {
+  const names = s => [...s].filter(n => PLACES.some(p => p.n === n)).sort();
+  const lines = ["Madrid 2027 guide: please remove these places", ...names(state.skips).map(n => "✕ " + n)];
+  const keep = names(state.favs);
+  if (keep.length) lines.push("", "Interested:", ...keep.map(n => "✓ " + n));
+  return lines.join("\n");
+}
+document.getElementById("sendList").addEventListener("click", async () => {
+  const text = listText(), note = document.getElementById("sendNote"), box = document.getElementById("listText");
+  note.hidden = false;
+  try {
+    if (navigator.share) { await navigator.share({ title: "Madrid 2027 removal list", text }); note.textContent = "Sent. Paste it to Claude when you ask for the next update."; return; }
+  } catch (e) { if (e && e.name === "AbortError") { note.textContent = "Not sent."; return; } }
+  try { await navigator.clipboard.writeText(text); note.textContent = "Copied. Paste it into WhatsApp or straight to Claude."; }
+  catch (e) { box.hidden = false; box.value = text; box.select(); note.textContent = "Copy this text and send it."; }
 });
 render();
 </script>
