@@ -1,4 +1,4 @@
-const CACHE = "mad27-80a8f80c50";
+const CACHE = "mad27-c121f75811";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
